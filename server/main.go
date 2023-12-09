@@ -24,10 +24,10 @@ import (
 
 	"github.com/adriancable/webtransport-go"
 
-	"jordicenzano/go-media-webtransport-server/deliverysession"
-	"jordicenzano/go-media-webtransport-server/mediapackager"
-	"jordicenzano/go-media-webtransport-server/memfile"
-	"jordicenzano/go-media-webtransport-server/memfiles"
+	"rm4n0s/go-media-webtransport-server/server/deliverysession"
+	"rm4n0s/go-media-webtransport-server/server/mediapackager"
+	"rm4n0s/go-media-webtransport-server/server/memfile"
+	"rm4n0s/go-media-webtransport-server/server/memfiles"
 )
 
 const CACHE_CLEAN_UP_PERIOD_MS = 10000
@@ -429,7 +429,7 @@ func main() {
 		ListenAddr:     ":4433",
 		TLSCert:        webtransport.CertFile{Path: "../certs/certificate.pem"},
 		TLSKey:         webtransport.CertFile{Path: "../certs/certificate.key"},
-		AllowedOrigins: []string{"moq-test.jordicenzano.dev", "googlechrome.github.io", "127.0.0.1:8080", "localhost:8080", "new-tab-page", ""},
+		AllowedOrigins: []string{"0.0.0.0:8080", "127.0.0.1:8080", "localhost:8080", "new-tab-page", ""},
 		QuicConfig: &webtransport.QuicConfig{
 			KeepAlive:      true,
 			MaxIdleTimeout: 30 * time.Second,

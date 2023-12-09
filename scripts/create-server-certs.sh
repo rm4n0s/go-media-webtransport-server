@@ -7,5 +7,8 @@
 # Create certs dir if it does not exists
 mkdir -p ../certs
 
-# Generate publi - private key 
-openssl req -newkey rsa:2048 -nodes -keyout ../certs/certificate.key -x509 -out ../certs/certificate.pem -subj '/CN=Test Certificate' -addext "subjectAltName = DNS:localhost"
+# Install mkcert trusty certificate in the OS
+mkcert -ecdsa -install
+
+# Generate public - private key 
+mkcert -ecdsa -cert-file "../certs/certificate.pem" -key-file "../certs/certificate.key" localhost 127.0.0.1 ::1
