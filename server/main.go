@@ -7,7 +7,6 @@ LICENSE file in the root directory of this source tree.
 package main
 
 import (
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -22,7 +21,8 @@ import (
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/adriancable/webtransport-go"
+	"github.com/quic-go/quic-go/http3"
+	"github.com/quic-go/webtransport-go"
 
 	"rm4n0s/go-media-webtransport-server/server/deliverysession"
 	"rm4n0s/go-media-webtransport-server/server/mediapackager"
@@ -44,7 +44,7 @@ const MAX_INFLIGHT_REQUEST = 300
 // Delivery: Max inflight request before stop sending video
 const MAX_INFLIGHT_REQUEST_BEFORE_STOP_VIDEO = 30
 
-func readBytes(s *webtransport.ReceiveStream, buffer []byte) error {
+func readBytes(s webtransport.ReceiveStream, buffer []byte) error {
 	readSize := 0
 	totalSize := len(buffer)
 	var err error = nil
@@ -85,7 +85,7 @@ func handleWebTransportIngestStreams(session *webtransport.Session, ingestSessio
 			go func(s webtransport.ReceiveStream) {
 				isError := false
 				headersSizeBytes := make([]byte, 8)
-				errReadHeaderSize := readBytes(&s, headersSizeBytes)
+				errReadHeaderSize := readBytes(s, headersSizeBytes)
 				if errReadHeaderSize != nil {
 					log.Error(fmt.Sprintf("%s(%v) - Error trying to read header length from uni stream. Err: %v", ingestSessionID, s.StreamID(), errReadHeaderSize))
 					isError = true
@@ -100,7 +100,7 @@ func handleWebTransportIngestStreams(session *webtransport.Session, ingestSessio
 						isError = true
 					} else {
 						headerBytes := make([]byte, headersSize)
-						errReadHeaderSize := readBytes(&s, headerBytes)
+						errReadHeaderSize := readBytes(s, headerBytes)
 						if errReadHeaderSize != nil {
 							log.Error(fmt.Sprintf("%s(%v) - Error trying to read header from uni stream. Err: %v", ingestSessionID, s.StreamID(), errReadHeaderSize))
 							isError = true
@@ -278,7 +278,7 @@ func handleWebTransportDeliveryStreams(session *webtransport.Session, deliverySe
 		}
 
 		// Graceful close
-		session.CloseSession()
+		session.CloseWithError(webtransport.SessionErrorCode(500), "Session closed gracefully")
 	}()
 }
 
@@ -400,10 +400,14 @@ func main() {
 
 	// create memfiles
 	memFiles := memfiles.New(CACHE_CLEAN_UP_PERIOD_MS)
-
-	http.HandleFunc("/moqingest/", func(rw http.ResponseWriter, r *http.Request) {
-		session := r.Body.(*webtransport.Session)
-		session.AcceptSession()
+	var server *webtransport.Server
+	http.HandleFunc("/moqingest/", func(w http.ResponseWriter, r *http.Request) {
+		session, err := server.Upgrade(w, r)
+		if err != nil {
+			log.Printf("upgrading failed: %s", err)
+			w.WriteHeader(500)
+			return
+		}
 		// session.RejectSession(400)
 
 		ingestSessionID := "I-" + uuid.New().String() + "-" + r.URL.Path
@@ -413,9 +417,13 @@ func main() {
 		handleWebTransportIngestStreams(session, ingestSessionID, r.URL.Path, r.URL.Query(), memFiles)
 	})
 
-	http.HandleFunc("/moqdelivery/", func(rw http.ResponseWriter, r *http.Request) {
-		session := r.Body.(*webtransport.Session)
-		session.AcceptSession()
+	http.HandleFunc("/moqdelivery/", func(w http.ResponseWriter, r *http.Request) {
+		session, err := server.Upgrade(w, r)
+		if err != nil {
+			log.Printf("upgrading failed: %s", err)
+			w.WriteHeader(500)
+			return
+		}
 
 		deliverySessionID := "D-" + uuid.New().String() + "-" + r.URL.Path
 
@@ -425,24 +433,36 @@ func main() {
 
 	// Note: "new-tab-page" in AllowedOrigins lets you access the server from a blank tab (via DevTools Console).
 	// "" in AllowedOrigins lets you access the server from JavaScript loaded from disk (i.e. via a file:// URL)
-	server := &webtransport.Server{
-		ListenAddr:     ":4433",
-		TLSCert:        webtransport.CertFile{Path: "../certs/certificate.pem"},
-		TLSKey:         webtransport.CertFile{Path: "../certs/certificate.key"},
-		AllowedOrigins: []string{"0.0.0.0:8080", "127.0.0.1:8080", "localhost:8080", "new-tab-page", ""},
-		QuicConfig: &webtransport.QuicConfig{
-			KeepAlive:      true,
-			MaxIdleTimeout: 30 * time.Second,
+	server = &webtransport.Server{
+		H3: http3.Server{Addr: ":4433"},
+		CheckOrigin: func(r *http.Request) bool {
+			return true
 		},
 	}
-
-	log.Info("Launching WebTransport server at: ", server.ListenAddr)
-	ctx, cancel := context.WithCancel(context.Background())
-	if err := server.Run(ctx); err != nil {
-		log.Error(fmt.Sprintf("Server error: %s", err))
-		cancel()
+	log.Info("Launching WebTransport server at: ", server.H3.Addr)
+	err := server.ListenAndServeTLS("../certs/certificate.pem", "../certs/certificate.key")
+	if err != nil {
+		memFiles.Stop()
+		log.Fatal(fmt.Sprintf("Server error: %s", err))
 	}
+	// server := &webtransport.Server{
+	// 	ListenAddr:     ":4433",
+	// 	TLSCert:        webtransport.CertFile{Path: "../certs/certificate.pem"},
+	// 	TLSKey:         webtransport.CertFile{Path: "../certs/certificate.key"},
+	// 	AllowedOrigins: []string{"0.0.0.0:8080", "127.0.0.1:8080", "localhost:8080", "new-tab-page", ""},
+	// 	QuicConfig: &webtransport.QuicConfig{
+	// 		KeepAlive:      true,
+	// 		MaxIdleTimeout: 30 * time.Second,
+	// 	},
+	// }
 
-	memFiles.Stop()
+	// log.Info("Launching WebTransport server at: ", server.ListenAddr)
+	// ctx, cancel := context.WithCancel(context.Background())
+	// if err := server.Run(ctx); err != nil {
+	// 	log.Error(fmt.Sprintf("Server error: %s", err))
+	// 	cancel()
+	// }
+
+	// memFiles.Stop()
 
 }

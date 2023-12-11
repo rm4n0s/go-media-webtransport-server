@@ -1,13 +1,15 @@
 # NOTICE
 This is a fork from 'facebookexperimental/go-media-webtransport-server' and 'facebookexperimental/webcodecs-capture-play' <br/>
 to put them in one repository and make the client (webcodecs-capture-play) run using Gin with the certificates.<br/>
+Moreover, I replaced Go compiler from 1.18 to 1.21, to replace the WebTransport's package <br/> 
+from "github.com/adriancable/webtransport-go" to "github.com/quic-go/webtransport-go". <br/>
 Also, updated the scripts to generate certificates from mkcert.<br/>
 This way I can study the code without running browser with specific arguments and I will be able to test it from firefox. <br/>
-Unfortunately, current version of Firefox does not support MediaStreamTrackProcessor <br/>
+Unfortunately, current version of Firefox does not support MediaStreamTrackProcessor. <br/>
 
 ## Installation
-Install go 1.18 to compile
-Install mkcert from https://github.com/FiloSottile/mkcert
+Install go 1.21 to compile <br/>
+Install mkcert from https://github.com/FiloSottile/mkcert <br/>
 And run
 ```bash
 go mod tidy

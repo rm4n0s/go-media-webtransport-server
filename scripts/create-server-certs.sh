@@ -4,8 +4,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-# Create certs dir if it does not exists
-mkdir -p ../certs
+# Create certs dir in the project's folder if it does not exists
+mkdir -p certs
 
 # Install mkcert trusty certificate in the OS
 mkcert -ecdsa -install
