@@ -11,4 +11,4 @@ mkdir -p certs
 mkcert -ecdsa -install
 
 # Generate public - private key 
-mkcert -ecdsa -cert-file "../certs/certificate.pem" -key-file "../certs/certificate.key" localhost 127.0.0.1 ::1
+go run filippo.io/mkcert -ecdsa -days 10 -cert-file "../certs/certificate.pem" -key-file "../certs/certificate.key" localhost 127.0.0.1 ::1
